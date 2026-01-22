@@ -76,7 +76,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         <Users size={18} />
                         Clientes
                     </Link>
-                    <Link href="/dashboard/proposals/new" className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${pathname.startsWith('/dashboard/proposals') ? 'bg-blue-600/10 text-blue-400 border border-blue-900/50' : 'hover:bg-slate-800'}`}>
+                    <Link href="/dashboard/proposals" className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${pathname.startsWith('/dashboard/proposals') ? 'bg-blue-600/10 text-blue-400 border border-blue-900/50' : 'hover:bg-slate-800'}`}>
                         <FileText size={18} />
                         Propostas
                     </Link>

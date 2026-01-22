@@ -19,9 +19,9 @@ export default function Home() {
             <a href="#features" className="hover:text-blue-700 transition-colors">Funcionalidades</a>
             <a href="#fluxo" className="hover:text-blue-700 transition-colors">Como Funciona</a>
           </nav>
-          <button className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-lg hover:shadow-blue-200">
+          <Link href="/login" className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-lg hover:shadow-blue-200">
             Acessar Sistema
-          </button>
+          </Link>
         </div>
       </header>
 
@@ -36,10 +36,10 @@ export default function Home() {
             Abandone o preenchimento manual. O <strong>Vorcon Engine</strong> gera propostas comerciais (HTML) e contratos jurídicos (DOCX) completos em segundos, com cálculo de preços e descontos automáticos.
           </p>
           <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start">
-            <button className="w-full sm:w-auto px-8 py-4 bg-blue-700 hover:bg-blue-800 text-white rounded-xl font-bold text-lg flex items-center justify-center gap-2 shadow-xl hover:shadow-blue-500/20 transition-all">
+            <Link href="/login" className="w-full sm:w-auto px-8 py-4 bg-blue-700 hover:bg-blue-800 text-white rounded-xl font-bold text-lg flex items-center justify-center gap-2 shadow-xl hover:shadow-blue-500/20 transition-all">
               <Database className="w-5 h-5" />
               Começar Agora
-            </button>
+            </Link>
             <button className="w-full sm:w-auto px-8 py-4 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl font-semibold text-lg flex items-center justify-center gap-2 transition-all">
               <FileText className="w-5 h-5" />
               Ver Demo

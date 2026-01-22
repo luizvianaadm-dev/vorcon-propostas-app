@@ -244,7 +244,7 @@ export default function NewProposalWizard() {
             )}
 
             {/* Generic Inputs */}
-            {selectedService !== 'AC' && (
+                  {/* Generic Inputs - Always show */}
                 <div className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Detalhes do Escopo / Observações</label>
@@ -267,7 +267,7 @@ export default function NewProposalWizard() {
                         />
                     </div>
                 </div>
-            )}
+            
         </div>
     );
 

@@ -9,16 +9,14 @@ import { calculateComplexPrice, formatCurrency } from '@/app/lib/pricing';
 
 export async function GET(
     req: NextRequest,
-    { params }: { params: { id: string } }
-) {
+  { params }: { params: Promise<{ id: string }> }) {
     try {
-        const proposalId = params.id;
-
+    const { id } = await params;
         // 1. Fetch Proposal Data
         const { data: proposal, error: propError } = await supabase
             .from('proposals')
             .select('*, client:clients(*)')
-            .eq('id', proposalId)
+            .eq('id', id)
             .single();
 
         if (propError || !proposal) {

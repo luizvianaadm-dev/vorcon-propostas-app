@@ -9,9 +9,9 @@ import { calculateComplexPrice, formatCurrency } from '@/app/lib/pricing';
 
 export async function GET(
     req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }) {
+    { params }: { params: Promise<{ id: string }> }) {
     try {
-    const { id } = await params;
+        const { id } = await params;
         // 1. Fetch Proposal Data
         const { data: proposal, error: propError } = await supabase
             .from('proposals')
@@ -110,7 +110,8 @@ export async function GET(
         // 6. Return File
         const filename = `${proposal.code}_${client.name.substring(0, 20).replace(/\s/g, '_')}.docx`;
 
-    return new NextResponse(buf as unknown as BodyInit, {            status: 200,
+        return new NextResponse(buf as unknown as BodyInit, {
+            status: 200,
             headers: {
                 'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                 'Content-Disposition': `attachment; filename="${filename}"`

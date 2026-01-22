@@ -1,7 +1,7 @@
 
 import { FileText, ShieldCheck, Calculator, Briefcase, BarChart, Package } from "lucide-react";
 
-export type ServiceCode = 'AC' | 'AUD' | 'ATS' | 'CON' | 'INV' | 'OTHER';
+export type ServiceCode = 'AC' | 'AUD' | 'ATS' | 'CON' | 'VAL' | 'INV' | 'OTHER';
 
 export interface EvaluatedFramework {
     id: string;
@@ -51,11 +51,19 @@ export const SERVICES: Record<ServiceCode, ServiceDefinition> = {
     },
     'CON': {
         id: 'CON',
-        name: 'Consultoria & Valuation',
-        description: 'Consultoria Financeira, Valuation, BPO.',
+        name: 'Consultoria Financeira',
+        description: 'BPO, Reestruturação Financeira.',
         defaultTemplate: 'template_consultoria.docx',
         icon: Briefcase,
         fields: ['consultancy_type', 'hours_estimated', 'consultant_name']
+    },
+    'VAL': {
+        id: 'VAL',
+        name: 'Valuation & M&A',
+        description: 'Avaliação de empresas e Due Diligence.',
+        defaultTemplate: 'template_valuation.docx',
+        icon: BarChart,
+        fields: ['company_sector', 'valuation_method', 'analyst_name']
     },
     'INV': {
         id: 'INV',

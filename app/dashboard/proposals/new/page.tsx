@@ -1,438 +1,246 @@
-
 "use client";
-
 import { useState, useEffect } from "react";
-import { ArrowRight, ArrowLeft, Check, FileText, Calculator, Building, AlertCircle, Upload, Wand2 } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check, FileText, Calculator, Building, AlertCircle, Upload, Wand2, Loader2 } from "lucide-react";
 import { supabase } from "@/app/lib/supabase";
 import { SERVICES, ServiceCode, EvaluatedFramework } from "@/app/lib/services";
 import { calculateComplexPrice, formatCurrency } from "@/app/lib/pricing";
 import { getMonthsDiff } from "@/app/lib/dates";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import PizZip from 'pizzip';
 
 export default function NewProposalWizard() {
-    const router = useRouter();
-    const [step, setStep] = useState(1);
-    const [loading, setLoading] = useState(false);
-    const [aiLoading, setAiLoading] = useState(false);
+  const router = useRouter();
+  const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  
+  // Data State
+  const [clients, setClients] = useState<any[]>([]);
+  const [selectedClient, setSelectedClient] = useState<string>("");
+  const [selectedService, setSelectedService] = useState<ServiceCode | "">("");
+  const [selectedSubType, setSelectedSubType] = useState<string>("");
+  
+  // Dynamic Inputs
+  const [inputData, setInputData] = useState({
+    start_date: "",
+    end_date: "",
+    pages: 0,
+    folders: 0,
+    scope_details: "",
+    manual_price: 0
+  });
 
-    // Data State
-    const [clients, setClients] = useState<any[]>([]);
-    const [selectedClient, setSelectedClient] = useState<string>("");
+  // Errors State
+  const [dateError, setDateError] = useState("");
 
-    const [selectedService, setSelectedService] = useState<ServiceCode | "">("");
-    const [selectedSubType, setSelectedSubType] = useState<string>("");
+  // Calculated Price
+  const [priceResult, setPriceResult] = useState<any>(null);
+  const [generatedCode, setGeneratedCode] = useState("");
 
-    // Dynamic Inputs
-    const [inputData, setInputData] = useState({
-        start_date: "",
-        end_date: "",
-        pages: 0,
-        folders: 0,
-        scope_details: "",
-        manual_price: 0
+  useEffect(() => {
+    supabase.from('clients').select('id, name, cnpj').then(({ data }) => {
+      if (data) setClients(data);
     });
+    generateSuggestion();
+  }, []);
 
-    // Calculated Price (for AC)
-    const [priceResult, setPriceResult] = useState<any>(null);
+  useEffect(() => {
+    if (selectedService) generateSuggestion();
+  }, [selectedService]);
 
-    // Code State
-    const [generatedCode, setGeneratedCode] = useState("");
+  async function generateSuggestion() {
+    const { count } = await supabase.from('proposals').select('*', { count: 'exact', head: true });
+    const nextNum = (count || 0) + 1 + 83;
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const type = selectedService || 'AC';
+    setGeneratedCode(`${year}${month}${type}${nextNum}`);
+  }
 
-    // Load Clients on mount
-    useEffect(() => {
-        supabase.from('clients').select('id, name, cnpj').then(({ data }) => {
-            if (data) setClients(data);
-        });
-
-        // Suggest next code
-        generateSuggestion();
-    }, []);
-
-    // Also update suggestion when service changes (if not manually edited ideally, but simplistic here)
-    useEffect(() => {
-        if (selectedService) generateSuggestion();
-    }, [selectedService]);
-
-    async function generateSuggestion() {
-        // 1. Get Count
-        const { count } = await supabase.from('proposals').select('*', { count: 'exact', head: true });
-        const nextNum = (count || 0) + 1 + 83; // +83 legacy
-
-        // 2. Format: YYYYMM + TYPE + ID
-        const date = new Date();
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const type = selectedService || 'AC';
-
-        setGeneratedCode(`${year}${month}${type}${nextNum}`);
+  // Validate Dates and Calculate Price
+  useEffect(() => {
+    if (inputData.start_date && inputData.end_date) {
+      if (new Date(inputData.end_date) < new Date(inputData.start_date)) {
+        setDateError("A data final não pode ser anterior à data inicial.");
+        setPriceResult(null);
+      } else {
+        setDateError("");
+        if (selectedService === 'AC' && inputData.pages > 0) {
+          const duration = getMonthsDiff(inputData.start_date, inputData.end_date);
+          const result = calculateComplexPrice(Number(inputData.pages), Number(inputData.folders), duration);
+          setPriceResult({ ...result, duration });
+        }
+      }
     }
+  }, [inputData, selectedService]);
 
-    // Recalculate Price for AC
-    useEffect(() => {
-        if (selectedService === 'AC' && inputData.pages > 0 && inputData.start_date && inputData.end_date) {
-            const duration = getMonthsDiff(inputData.start_date, inputData.end_date);
-            const result = calculateComplexPrice(Number(inputData.pages), Number(inputData.folders), duration);
-            setPriceResult({ ...result, duration });
-        } else {
-            setPriceResult(null);
-        }
-    }, [inputData, selectedService]);
+  const generateAIScope = async () => {
+    setAiLoading(true);
+    await new Promise(r => setTimeout(r, 1500));
+    const serviceName = SERVICES[selectedService as ServiceCode]?.name || "Serviço";
+    const generatedText = `O escopo deste serviço de ${serviceName} contempla a execução integral das rotinas mensais, incluindo análise técnica e relatórios gerenciais personalizados. 
 
-    // --- CSV Import Features ---
-    const handleCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+Considerações Específicas:
+- Atendimento prioritário.
+- Adequação às normas vigentes (NBC).
+- Revisão periódica de dados.`;
+    setInputData(prev => ({ ...prev, scope_details: generatedText }));
+    setAiLoading(false);
+  };
 
-        const reader = new FileReader();
-        reader.onload = async (evt) => {
-            const text = evt.target?.result as string;
-            // Simple parsing assuming: ClientName;Service;Pages;Folders;StartDate;EndDate
-            // Real implementation would be more robust. 
-            // This is a "Concept Prototype" logic:
+  async function handleFinish() {
+    if (dateError) return;
+    setLoading(true);
+    const finalValue = priceResult ? priceResult.totalValue : inputData.manual_price;
+    const { data, error } = await supabase.from('proposals').insert([{
+      client_id: selectedClient,
+      code: generatedCode,
+      service_type: selectedService,
+      status: 'GENERATED',
+      input_data: { ...inputData, subType: selectedSubType },
+      start_date: inputData.start_date || null,
+      end_date: inputData.end_date || null,
+      total_value: finalValue,
+      base_value: priceResult ? priceResult.baseMonthlyRaw : finalValue
+    }]).select();
 
-            try {
-                const lines = text.split('\n');
-                if (lines.length < 2) return; // Header + 1 row
-                const row = lines[1].split(';'); // Assuming Semicolon CSV
-
-                if (row.length >= 4) {
-                    alert("CSV Importado! Preenchendo dados...");
-                    // 1. Try to find client
-                    const clientName = row[0].trim();
-                    const foundClient = clients.find(c => c.name.toLowerCase().includes(clientName.toLowerCase()));
-                    if (foundClient) setSelectedClient(foundClient.id);
-
-                    // 2. Service (Default to AC for now if not specified)
-                    setSelectedService('AC');
-
-                    // 3. Inputs
-                    setInputData(prev => ({
-                        ...prev,
-                        pages: Number(row[2]) || 0,
-                        folders: Number(row[3]) || 0,
-                        start_date: formatCSVDate(row[4]), // YYYY-MM-DD
-                        end_date: formatCSVDate(row[5])
-                    }));
-                }
-            } catch (err) {
-                alert("Erro ao ler CSV. Verifique o formato.");
-            }
-        };
-        reader.readAsText(file);
-    };
-
-    function formatCSVDate(dateStr: string) {
-        if (!dateStr) return "";
-        // Assume DD/MM/YYYY -> YYYY-MM-DD
-        const parts = dateStr.trim().split('/');
-        if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
-        return "";
+    if (!error && data) {
+      router.push(`/dashboard/proposals/${data[0].id}`);
+    } else {
+      setLoading(false);
+      alert("Erro ao criar proposta: " + (error?.message || "Erro desconhecido"));
     }
+  }
 
-    // --- AI Scope Generation ---
-    const generateAIScope = async () => {
-        setAiLoading(true);
-        // Simulate API call delay
-        await new Promise(r => setTimeout(r, 1500));
-
-        const serviceName = SERVICES[selectedService as ServiceCode]?.name || "Serviço";
-        const generatedText = `O escopo deste serviço de ${serviceName} contempla a execução integral das rotinas mensais, incluindo processamento de folhas, análise tributária e relatórios gerenciais personalizados para o cliente. \n\nConsiderações Específicas:\n- Atendimento prioritário em horário comercial.\n- Adequação completa às normas vigentes (NBC).\n- Revisão trimestral de alíquotas.`;
-
-        setInputData(prev => ({ ...prev, scope_details: generatedText }));
-        setAiLoading(false);
-    };
-
-
-    async function handleFinish() {
-        setLoading(true);
-
-        // Determine final value
-        const finalValue = priceResult ? priceResult.totalValue : inputData.manual_price;
-
-        const { data, error } = await supabase.from('proposals').insert([{
-            client_id: selectedClient,
-            code: generatedCode, // Use editable code
-            service_type: selectedService,
-            status: 'GENERATED',
-            input_data: { ...inputData, subType: selectedSubType },
-            start_date: inputData.start_date || null,
-            end_date: inputData.end_date || null,
-            total_value: finalValue,
-            base_value: priceResult ? priceResult.baseMonthlyRaw : finalValue
-        }]).select();
-
-        setLoading(false);
-        if (!error && data) {
-            router.push(`/dashboard/proposals/${data[0].id}`);
-        } else {
-            alert("Erro ao criar proposta: " + (error?.message || "Erro desconhecido"));
-        }
-    }
-
-    // --- Step Components ---
-
-    const StepClient = () => (
-        <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-            <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold text-slate-800">1. Selecione o Cliente</h2>
-                <label className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors">
-                    <Upload size={14} />
-                    Importar CSV
-                    <input type="file" accept=".csv" className="hidden" onChange={handleCSVUpload} />
-                </label>
-            </div>
-
-            <div className="grid gap-4">
-                <select
-                    className="w-full p-4 border border-slate-300 rounded-xl text-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={selectedClient}
-                    onChange={e => setSelectedClient(e.target.value)}
-                >
-                    <option value="">-- Escolha um cliente --</option>
-                    {clients.map(c => (
-                        <option key={c.id} value={c.id}>{c.name} {c.cnpj ? `(${c.cnpj})` : ''}</option>
-                    ))}
-                </select>
-
-                <div className="pt-4 border-t border-slate-100">
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Código da Proposta (Sugerido)</label>
-                    <input
-                        type="text"
-                        className="w-full font-mono text-lg tracking-wide p-2 border border-slate-300 rounded-lg bg-slate-50"
-                        value={generatedCode}
-                        onChange={(e) => setGeneratedCode(e.target.value)}
-                    />
-                    <p className="text-xs text-slate-500 mt-1">Formato: ANO + MÊS + TIPO + SEQUENCIAL (Editável)</p>
-                </div>
-
-                <div className="text-center">
-                    <span className="text-slate-500">Ou </span>
-                    <Link href="/dashboard/clients/new" className="text-blue-600 font-semibold hover:underline">Cadastre um novo cliente</Link>
-                </div>
-            </div>
+  return (
+    <div className="flex flex-col h-full bg-slate-50">
+      <header className="px-8 py-6 bg-white border-b border-slate-200">
+        <h1 className="text-2xl font-bold text-slate-900">Nova Proposta</h1>
+        <div className="flex gap-8 mt-4">
+          <div className={`text-sm font-bold pb-2 border-b-2 ${step >= 1 ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400'}`}>1. Cliente</div>
+          <div className={`text-sm font-bold pb-2 border-b-2 ${step >= 2 ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400'}`}>2. Serviço</div>
+          <div className={`text-sm font-bold pb-2 border-b-2 ${step >= 3 ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400'}`}>3. Detalhes</div>
         </div>
-    );
+      </header>
 
-    const StepService = () => (
-        <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-            <h2 className="text-xl font-bold text-slate-800">2. Tipo de Serviço</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {Object.entries(SERVICES).map(([code, def]) => {
-                    const Icon = def.icon;
-                    const isSelected = selectedService === code;
-                    return (
-                        <button
-                            key={code}
-                            onClick={() => { setSelectedService(code as ServiceCode); setSelectedSubType(""); }}
-                            className={`p-6 rounded-xl border text-left transition-all flex items-start gap-4
-                            ${isSelected ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'}
-                        `}
-                        >
-                            <div className={`p-3 rounded-lg ${isSelected ? 'bg-blue-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>
-                                <Icon size={24} />
-                            </div>
-                            <div>
-                                <h3 className={`font-bold ${isSelected ? 'text-blue-900' : 'text-slate-900'}`}>{def.name}</h3>
-                                <p className="text-sm text-slate-500 mt-1 leading-relaxed">{def.description}</p>
-                            </div>
-                        </button>
-                    )
-                })}
+      <div className="flex-1 overflow-auto p-8">
+        <div className="max-w-4xl mx-auto">
+          {step === 1 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-bold text-slate-800">Selecione o Cliente</h2>
+              <select 
+                className="w-full p-4 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                value={selectedClient}
+                onChange={e => setSelectedClient(e.target.value)}
+              >
+                <option value="">-- Escolha um cliente --</option>
+                {clients.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <div className="pt-4">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Código Sugerido</label>
+                <input 
+                  type="text" 
+                  className="w-full p-3 border border-slate-300 rounded-lg font-mono" 
+                  value={generatedCode} 
+                  onChange={e => setGeneratedCode(e.target.value)}
+                />
+              </div>
             </div>
+          )}
 
-            {/* SubType Selection for AUD */}
-            {selectedService && SERVICES[selectedService].subTypes && (
-                <div className="mt-6 p-6 bg-slate-50 rounded-xl border border-slate-200 animate-in fade-in">
-                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Especifique o Modelo</h3>
-                    <div className="space-y-3">
-                        {SERVICES[selectedService].subTypes?.map((sub) => (
-                            <label key={sub.id} className="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-lg cursor-pointer hover:border-blue-300">
-                                <input
-                                    type="radio"
-                                    name="subtype"
-                                    checked={selectedSubType === sub.id}
-                                    onChange={() => setSelectedSubType(sub.id)}
-                                    className="w-5 h-5 text-blue-600 focus:ring-blue-500"
-                                />
-                                <span className="text-slate-700 font-medium">{sub.label}</span>
-                            </label>
-                        ))}
+          {step === 2 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-bold text-slate-800">Tipo de Serviço</h2>
+              <div className="grid grid-cols-2 gap-4">
+                {Object.entries(SERVICES).map(([code, def]) => (
+                  <button 
+                    key={code}
+                    onClick={() => { setSelectedService(code as ServiceCode); setSelectedSubType(""); }}
+                    className={`p-6 rounded-xl border text-left flex gap-4 transition-all ${selectedService === code ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' : 'border-slate-200 hover:bg-slate-50'}`}
+                  >
+                    <def.icon size={24} className={selectedService === code ? 'text-blue-600' : 'text-slate-400'} />
+                    <div>
+                      <h3 className="font-bold">{def.name}</h3>
+                      <p className="text-xs text-slate-500">{def.description}</p>
                     </div>
-                </div>
-            )}
-        </div>
-    );
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
-    const StepDetails = () => (
-        <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-            <h2 className="text-xl font-bold text-slate-800">3. Detalhes & Precificação</h2>
-
-            <div className="grid grid-cols-2 gap-6">
+          {step === 3 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-bold text-slate-800">Detalhes & Período</h2>
+              <div className="grid grid-cols-2 gap-6">
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Data Início</label>
-                    <input type="date" className="input-field" value={inputData.start_date} onChange={e => setInputData({ ...inputData, start_date: e.target.value })} />
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Data Início</label>
+                  <input type="date" className="w-full p-3 border border-slate-300 rounded-lg" value={inputData.start_date} onChange={e => setInputData({ ...inputData, start_date: e.target.value })} />
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Data Fim</label>
-                    <input type="date" className="input-field" value={inputData.end_date} onChange={e => setInputData({ ...inputData, end_date: e.target.value })} />
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Data Fim</label>
+                  <input type="date" className={`w-full p-3 border rounded-lg ${dateError ? 'border-red-500 ring-1 ring-red-200' : 'border-slate-300'}`} value={inputData.end_date} onChange={e => setInputData({ ...inputData, end_date: e.target.value })} />
+                  {dateError && <p className="text-xs text-red-500 mt-1">{dateError}</p>}
                 </div>
+              </div>
+
+              {selectedService === 'AC' && (
+                <div className="p-6 bg-blue-50 rounded-xl border border-blue-100 grid grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-blue-900">Páginas</label>
+                    <input type="number" className="w-full p-3 border border-blue-200 rounded-lg" value={inputData.pages} onChange={e => setInputData({ ...inputData, pages: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-blue-900">Pastas</label>
+                    <input type="number" className="w-full p-3 border border-blue-200 rounded-lg" value={inputData.folders} onChange={e => setInputData({ ...inputData, folders: Number(e.target.value) })} />
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-4">
+                <div className="flex justify-between mb-1">
+                  <label className="text-sm font-medium text-slate-700">Escopo</label>
+                  <button onClick={generateAIScope} className="text-xs text-purple-600 flex items-center gap-1 font-bold">
+                    {aiLoading ? <Loader2 className="animate-spin" size={12} /> : <Wand2 size={12} />} Gerar com IA
+                  </button>
+                </div>
+                <textarea rows={4} className="w-full p-4 border border-slate-300 rounded-lg" value={inputData.scope_details} onChange={e => setInputData({ ...inputData, scope_details: e.target.value })} />
+              </div>
             </div>
-
-            {/* AC Specific Inputs */}
-            {selectedService === 'AC' && (
-                <div className="p-6 bg-blue-50/50 rounded-xl border border-blue-100 space-y-6">
-                    <div className="grid grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-sm font-medium text-blue-900 mb-1">Média de Páginas</label>
-                            <input type="number" className="input-field" value={inputData.pages} onChange={e => setInputData({ ...inputData, pages: Number(e.target.value) })} />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-blue-900 mb-1">Qtd. Pastas</label>
-                            <input type="number" className="input-field" value={inputData.folders} onChange={e => setInputData({ ...inputData, folders: Number(e.target.value) })} />
-                        </div>
-                    </div>
-
-                    {/* Price Preview */}
-                    {priceResult && (
-                        <div className="bg-white p-4 rounded-lg border border-blue-200 shadow-sm">
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="text-slate-500 text-sm">Duração</span>
-                                <span className="font-semibold">{priceResult.duration} meses</span>
-                            </div>
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="text-slate-500 text-sm">Mensalidade (Base)</span>
-                                <span className="font-semibold">{formatCurrency(priceResult.baseMonthlyRaw)}</span>
-                            </div>
-                            <div className="flex justify-between items-center border-t border-slate-100 pt-2 mt-2">
-                                <span className="text-slate-900 font-bold">Valor Total do Contrato</span>
-                                <span className="text-blue-600 font-bold text-lg">{formatCurrency(priceResult.totalValue)}</span>
-                            </div>
-                            <p className="text-xs text-green-600 mt-1 text-right">
-                                Economia de {formatCurrency(priceResult.savings)} ({Math.round(priceResult.discountRate * 100)}%)
-                            </p>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* Generic Inputs */}
-            {/* Generic Inputs - Always show */}
-            <div className="space-y-4">
-                <div>
-                    <div className="flex justify-between items-center mb-1">
-                        <label className="block text-sm font-medium text-slate-700">Detalhes do Escopo / Observações</label>
-                        <button
-                            onClick={generateAIScope}
-                            disabled={aiLoading}
-                            className="text-xs flex items-center gap-1 text-purple-600 hover:text-purple-700 font-medium transition-colors"
-                        >
-                            {aiLoading ? <span className="animate-spin">✨</span> : <Wand2 size={12} />}
-                            {aiLoading ? "Gerando..." : "Gerar com IA"}
-                        </button>
-                    </div>
-                    <textarea
-                        rows={3}
-                        className="input-field resize-none"
-                        placeholder="Descreva particularidades do serviço..."
-                        value={inputData.scope_details}
-                        onChange={e => setInputData({ ...inputData, scope_details: e.target.value })}
-                    ></textarea>
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Valor Total (Manual)</label>
-                    <input
-                        type="number"
-                        className="input-field font-mono"
-                        placeholder="0.00"
-                        value={inputData.manual_price || ''}
-                        onChange={e => setInputData({ ...inputData, manual_price: Number(e.target.value) })}
-                    />
-                </div>
-            </div>
-
+          )}
         </div>
-    );
+      </div>
 
-    // --- Main Render ---
-    return (
-        <div className="flex flex-col h-full bg-slate-50">
-            {/* Header */}
-            <header className="px-8 py-6 bg-white border-b border-slate-200">
-                <h1 className="text-2xl font-bold text-slate-900">Nova Proposta</h1>
-
-                {/* Progress Bar */}
-                <div className="flex items-center gap-2 mt-4 text-sm font-medium text-slate-500">
-                    <span className={step >= 1 ? "text-blue-600" : ""}>Cliente</span>
-                    <ArrowRight size={14} />
-                    <span className={step >= 2 ? "text-blue-600" : ""}>Serviço</span>
-                    <ArrowRight size={14} />
-                    <span className={step >= 3 ? "text-blue-600" : ""}>Detalhes</span>
-                </div>
-            </header>
-
-            {/* Content */}
-            <div className="flex-1 overflow-auto p-8">
-                <div className="max-w-3xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-200 min-h-[500px] flex flex-col">
-
-                    <div className="flex-1">
-                        {step === 1 && <StepClient />}
-                        {step === 2 && <StepService />}
-                        {step === 3 && <StepDetails />}
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex justify-between mt-8 pt-8 border-t border-slate-100">
-                        <button
-                            onClick={() => setStep(s => Math.max(1, s - 1))}
-                            disabled={step === 1}
-                            className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50 transition-all"
-                        >
-                            <ArrowLeft size={18} /> Voltar
-                        </button>
-
-                        {step < 3 ? (
-                            <button
-                                onClick={() => setStep(s => s + 1)}
-                                disabled={
-                                    (step === 1 && !selectedClient) ||
-                                    (step === 2 && !selectedService) ||
-                                    (step === 2 && selectedService === 'AUD' && !selectedSubType)
-                                }
-                                className="flex items-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg shadow-blue-200 disabled:opacity-50 disabled:shadow-none transition-all"
-                            >
-                                Próximo <ArrowRight size={18} />
-                            </button>
-                        ) : (
-                            <button
-                                onClick={handleFinish}
-                                disabled={loading || (selectedService === 'AC' && !priceResult)}
-                                className="flex items-center gap-2 px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg shadow-green-200 disabled:opacity-50 disabled:shadow-none transition-all"
-                            >
-                                {loading ? <div className="animate-spin w-5 h-5 border-2 border-white rounded-full border-t-transparent" /> : <Check size={18} />}
-                                Gerar Proposta
-                            </button>
-                        )}
-                    </div>
-
-                </div>
-            </div>
-
-            <style jsx global>{`
-        .input-field {
-            width: 100%;
-            padding: 0.75rem 1rem;
-            border: 1px solid #e2e8f0;
-            border-radius: 0.75rem;
-            outline: none;
-            transition: all 0.2s;
-        }
-        .input-field:focus {
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-      `}</style>
-        </div>
-    );
+      <footer className="p-6 bg-white border-t border-slate-200 flex justify-between">
+        <button 
+          onClick={() => setStep(s => s - 1)} 
+          disabled={step === 1}
+          className="px-6 py-2 rounded-lg font-bold text-slate-500 disabled:opacity-30"
+        >
+          Voltar
+        </button>
+        {step < 3 ? (
+          <button 
+            onClick={() => setStep(s => s + 1)} 
+            disabled={!selectedClient || (step === 2 && !selectedService)}
+            className="px-8 py-2 bg-blue-600 text-white rounded-lg font-bold shadow-lg shadow-blue-200"
+          >
+            Próximo
+          </button>
+        ) : (
+          <button 
+            onClick={handleFinish} 
+            disabled={loading || !!dateError}
+            className="px-8 py-2 bg-green-600 text-white rounded-lg font-bold flex items-center gap-2"
+          >
+            {loading && <Loader2 className="animate-spin" size={18} />}
+            Finalizar Proposta
+          </button>
+        )}
+      </footer>
+    </div>
+  );
 }

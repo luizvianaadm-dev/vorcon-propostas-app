@@ -2,18 +2,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ArrowRight, ArrowLeft, Check, FileText, Calculator, Building, AlertCircle } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check, FileText, Calculator, Building, AlertCircle, Upload, Wand2 } from "lucide-react";
 import { supabase } from "@/app/lib/supabase";
 import { SERVICES, ServiceCode, EvaluatedFramework } from "@/app/lib/services";
 import { calculateComplexPrice, formatCurrency } from "@/app/lib/pricing";
 import { getMonthsDiff } from "@/app/lib/dates";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import PizZip from 'pizzip';
 
 export default function NewProposalWizard() {
     const router = useRouter();
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
+    const [aiLoading, setAiLoading] = useState(false);
 
     // Data State
     const [clients, setClients] = useState<any[]>([]);
@@ -78,6 +80,71 @@ export default function NewProposalWizard() {
         }
     }, [inputData, selectedService]);
 
+    // --- CSV Import Features ---
+    const handleCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            const text = evt.target?.result as string;
+            // Simple parsing assuming: ClientName;Service;Pages;Folders;StartDate;EndDate
+            // Real implementation would be more robust. 
+            // This is a "Concept Prototype" logic:
+
+            try {
+                const lines = text.split('\n');
+                if (lines.length < 2) return; // Header + 1 row
+                const row = lines[1].split(';'); // Assuming Semicolon CSV
+
+                if (row.length >= 4) {
+                    alert("CSV Importado! Preenchendo dados...");
+                    // 1. Try to find client
+                    const clientName = row[0].trim();
+                    const foundClient = clients.find(c => c.name.toLowerCase().includes(clientName.toLowerCase()));
+                    if (foundClient) setSelectedClient(foundClient.id);
+
+                    // 2. Service (Default to AC for now if not specified)
+                    setSelectedService('AC');
+
+                    // 3. Inputs
+                    setInputData(prev => ({
+                        ...prev,
+                        pages: Number(row[2]) || 0,
+                        folders: Number(row[3]) || 0,
+                        start_date: formatCSVDate(row[4]), // YYYY-MM-DD
+                        end_date: formatCSVDate(row[5])
+                    }));
+                }
+            } catch (err) {
+                alert("Erro ao ler CSV. Verifique o formato.");
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    function formatCSVDate(dateStr: string) {
+        if (!dateStr) return "";
+        // Assume DD/MM/YYYY -> YYYY-MM-DD
+        const parts = dateStr.trim().split('/');
+        if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+        return "";
+    }
+
+    // --- AI Scope Generation ---
+    const generateAIScope = async () => {
+        setAiLoading(true);
+        // Simulate API call delay
+        await new Promise(r => setTimeout(r, 1500));
+
+        const serviceName = SERVICES[selectedService as ServiceCode]?.name || "Serviço";
+        const generatedText = `O escopo deste serviço de ${serviceName} contempla a execução integral das rotinas mensais, incluindo processamento de folhas, análise tributária e relatórios gerenciais personalizados para o cliente. \n\nConsiderações Específicas:\n- Atendimento prioritário em horário comercial.\n- Adequação completa às normas vigentes (NBC).\n- Revisão trimestral de alíquotas.`;
+
+        setInputData(prev => ({ ...prev, scope_details: generatedText }));
+        setAiLoading(false);
+    };
+
+
     async function handleFinish() {
         setLoading(true);
 
@@ -98,7 +165,6 @@ export default function NewProposalWizard() {
 
         setLoading(false);
         if (!error && data) {
-            // Redirect to View Page
             router.push(`/dashboard/proposals/${data[0].id}`);
         } else {
             alert("Erro ao criar proposta: " + (error?.message || "Erro desconhecido"));
@@ -109,7 +175,15 @@ export default function NewProposalWizard() {
 
     const StepClient = () => (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-            <h2 className="text-xl font-bold text-slate-800">1. Selecione o Cliente</h2>
+            <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold text-slate-800">1. Selecione o Cliente</h2>
+                <label className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors">
+                    <Upload size={14} />
+                    Importar CSV
+                    <input type="file" accept=".csv" className="hidden" onChange={handleCSVUpload} />
+                </label>
+            </div>
+
             <div className="grid gap-4">
                 <select
                     className="w-full p-4 border border-slate-300 rounded-xl text-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none"
@@ -244,30 +318,40 @@ export default function NewProposalWizard() {
             )}
 
             {/* Generic Inputs */}
-                  {/* Generic Inputs - Always show */}
-                <div className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Detalhes do Escopo / Observações</label>
-                        <textarea
-                            rows={3}
-                            className="input-field resize-none"
-                            placeholder="Descreva particularidades do serviço..."
-                            value={inputData.scope_details}
-                            onChange={e => setInputData({ ...inputData, scope_details: e.target.value })}
-                        ></textarea>
+            {/* Generic Inputs - Always show */}
+            <div className="space-y-4">
+                <div>
+                    <div className="flex justify-between items-center mb-1">
+                        <label className="block text-sm font-medium text-slate-700">Detalhes do Escopo / Observações</label>
+                        <button
+                            onClick={generateAIScope}
+                            disabled={aiLoading}
+                            className="text-xs flex items-center gap-1 text-purple-600 hover:text-purple-700 font-medium transition-colors"
+                        >
+                            {aiLoading ? <span className="animate-spin">✨</span> : <Wand2 size={12} />}
+                            {aiLoading ? "Gerando..." : "Gerar com IA"}
+                        </button>
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Valor Total (Manual)</label>
-                        <input
-                            type="number"
-                            className="input-field font-mono"
-                            placeholder="0.00"
-                            value={inputData.manual_price || ''}
-                            onChange={e => setInputData({ ...inputData, manual_price: Number(e.target.value) })}
-                        />
-                    </div>
+                    <textarea
+                        rows={3}
+                        className="input-field resize-none"
+                        placeholder="Descreva particularidades do serviço..."
+                        value={inputData.scope_details}
+                        onChange={e => setInputData({ ...inputData, scope_details: e.target.value })}
+                    ></textarea>
                 </div>
-            
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Valor Total (Manual)</label>
+                    <input
+                        type="number"
+                        className="input-field font-mono"
+                        placeholder="0.00"
+                        value={inputData.manual_price || ''}
+                        onChange={e => setInputData({ ...inputData, manual_price: Number(e.target.value) })}
+                    />
+                </div>
+            </div>
+
         </div>
     );
 

@@ -1,5 +1,5 @@
 
-import { FileText, ShieldCheck, Calculator, Briefcase, BarChart, Package } from "lucide-react";
+import { FileText, ShieldCheck, Calculator, Briefcase, BarChart, Package, Settings } from "lucide-react";
 
 export type ServiceCode = 'AC' | 'AUD' | 'ATS' | 'CON' | 'VAL' | 'INV' | 'OTHER';
 
@@ -78,9 +78,8 @@ export const SERVICES: Record<ServiceCode, ServiceDefinition> = {
         name: 'Outros Serviços',
         description: 'Personalizado / Novos Modelos.',
         defaultTemplate: 'template_generic.docx',
-        icon: Settings, // Will need import
+        icon: Settings, 
         fields: ['custom_title', 'custom_scope']
     }
 };
 
-import { Settings } from "lucide-react"; 

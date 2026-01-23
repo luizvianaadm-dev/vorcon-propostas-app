@@ -13,6 +13,8 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+    const [resetMode, setResetMode] = useState(false);
+    const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
     const errorObj = searchParams.get('error');
@@ -50,6 +52,26 @@ function LoginForm() {
     router.push('/dashboard');
   }
 
+    async function handlePasswordReset(e: React.FormEvent) {
+          e.preventDefault();
+          setLoading(true);
+          setError("");
+          setSuccessMessage("");
+
+          const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                  redirectTo: `${window.location.origin}/login`,
+                });
+
+          if (error) {
+                  setError(error.message);
+                  setLoading(false);
+                  return;
+                }
+
+          setSuccessMessage("Email de recuperação enviado! Verifique sua caixa de entrada.");
+          setLoading(false);
+        }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
@@ -62,8 +84,7 @@ function LoginForm() {
         <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">
           Vorcon Propostas
         </h1>
-        <p className="text-center text-gray-600 mb-8">Faça login para continuar</p>
-
+      <p className="text-center text-gray-600 mb-8">{resetMode ? "Digite seu email para recuperar a senha" : "Faça login para continuar"}</p>
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-start gap-2">
             <ShieldAlert className="w-5 h-5 mt-0.5 flex-shrink-0" />
@@ -71,8 +92,13 @@ function LoginForm() {
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div>
+              {successMessage && (
+              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6">
+                          <span>{successMessage}</span>
+                        </div>
+            )}
+
+      <form onSubmit={resetMode ? handlePasswordReset : handleLogin} className="space-y-6">          <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
               Email
             </label>
@@ -91,7 +117,8 @@ function LoginForm() {
             </div>
           </div>
 
-          <div>
+        {!resetMode && (
+      <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
               Senha
             </label>
@@ -109,6 +136,7 @@ function LoginForm() {
               />
             </div>
           </div>
+              )}
 
           <button
             type="submit"
@@ -118,13 +146,42 @@ function LoginForm() {
             {loading ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Entrando...
-              </>
+            resetMode ? "Enviando..." : "Entrando..."              </>
             ) : (
-              "Entrar"
-            )}
+            resetMode ? "Enviar" : "Entrar"            )}
           </button>
         </form>
+
+              <div className="mt-6 text-center space-y-3">
+                        {resetMode ? (
+                <button
+                              type="button"
+                              onClick={() => {
+                                              setResetMode(false);
+                                              setError("");
+                                              setSuccessMessage("");
+                                            }}
+                              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                            >
+                              ← Voltar para o login
+                            </button>
+              ) : (
+                <button
+                              type="button"
+                              onClick={() => {
+                                              setResetMode(true);
+                                              setError("");
+                                            }}
+                              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                            >
+                              Esqueceu sua senha?
+                            </button>
+              )}
+
+                        <Link href="/" className="block text-blue-600 hover:text-blue-700 text-sm font-medium">
+                                    ← Voltar para página inicial
+                                  </Link>
+                      </div>
 
         <div className="mt-6 text-center">
           <Link href="/" className="text-blue-600 hover:text-blue-700 text-sm font-medium">
